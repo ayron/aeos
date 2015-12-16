@@ -16,97 +16,129 @@ mu = 398600.4418;  # km^3/s^2
 
 # Orbital Parameters
 # ------------------
+class OrbitalParameters(object):
 
-def cartesian_to_keplarian(r, v):
+    def __init__(self, a, e, i, raan, omega, theta):
 
-    # Distance
-    R = norm(r)
+        self.a = a
+        self.e = e
+        self.i = i
+        self.raan = raan
+        self.omega = omega
+        self.theta = theta
 
-    # Orbital Energy
-    epsilon = 0.5*dot(v, v) - mu/R
-    
-    # Semi-major Axis
-    a = -0.5*mu/epsilon
+    def from_cartesian(self, r, v):
 
-    # Angular Velocity
-    h = cross(r, v)
+        # Distance
+        R = norm(r)
 
-    # Eccentricity
-    evec = cross(v, h)/mu - r/R
-    e = norm(evec)
+        # Orbital Energy
+        epsilon = 0.5*dot(v, v) - mu/R
 
-    # Inclination
-    i = arccos(dot(h, Z)/norm(h))
+        # Semi-major Axis
+        a = -0.5*mu/epsilon
 
-    # RAAN
-    n = cross(Z, h)     # n points to the ascneding node
-    if norm(n) == 0:
-        n = array([1, 0, 0])    # If t
-    else:
-        n = n/norm(n)   # Normalize
+        # Angular Velocity
+        h = cross(r, v)
 
-    RAAN = arccos(dot(n, X))
-    if dot(n, Y) < 0:
-        RAAN = 2*pi - RAAN
+        # Eccentricity
+        evec = cross(v, h)/mu - r/R
+        e = norm(evec)
 
-    # Argument of perigee
-    if e == 0:
-        omega = 0   # By convention
-    else:
-        omega = arccos(dot(n, evec)/e)
-        if dot(evec, Z) < 0:
-            omega = 2*pi - omega
+        # Inclination
+        i = arccos(dot(h, Z)/norm(h))
 
-    # Argument of latitude
-    u = arccos(dot(n,r)/R)
-    if dot(r, Z) < 0:
-        u = 2*pi - u
+        # RAAN
+        n = cross(Z, h)     # n points to the ascneding node
+        if norm(n) == 0:
+            n = array([1, 0, 0])    # If t
+        else:
+            n = n/norm(n)   # Normalize
 
-    # True Anomaly
-    theta = u - omega
+        RAAN = arccos(dot(n, X))
+        if dot(n, Y) < 0:
+            RAAN = 2*pi - RAAN
 
-    # Eccentric anomaly
-    #E = 2*arctan(sqrt((1-e)/(1+e))*tan(theta/2))
+        # Argument of perigee
+        if e == 0:
+            omega = 0   # By convention
+        else:
+            omega = arccos(dot(n, evec)/e)
+            if dot(evec, Z) < 0:
+                omega = 2*pi - omega
 
-    # Time of Perigee Passage
-    #t0 = t - (E - e*sin(E))*sqrt(a**3/mu)
+        # Argument of latitude
+        u = arccos(dot(n,r)/R)
+        if dot(r, Z) < 0:
+            u = 2*pi - u
 
-    return a, e, i, RAAN, omega, theta
+        # True Anomaly
+        theta = u - omega
 
-def keplerian_to_cartesian(a, e, i, RAAN, omega, theta):
+        # Eccentric anomaly
+        #E = 2*arctan(sqrt((1-e)/(1+e))*tan(theta/2))
 
-    # Mean motion
-    #n = sqrt(mu/a**3)
+        # Time of Perigee Passage
+        #t0 = t - (E - e*sin(E))*sqrt(a**3/mu)
 
-    # Mean Anomaly
-    #M = n*(t-t0)
+        self.a = a
+        self.e = e
+        self.i = i
+        self.raan = RAAN
+        self.omega = omega
+        self.theta = theta
 
-    # Eccentric Anomaly
-    #from scipy.optimize import brentq
-    #E = brentq(lambda E: E - e*sin(E) - M, 0, 2*pi)
+    def generate_ephemeris(self, N):
 
-    # True Anomaly
-    #theta = 2*arctan(sqrt((1+e)/(1-e))*tan(0.5*E))
+        start_theta = self.theta
+        ephemeris = zeros((N, 6))
+        for i, angle in enumerate(linspace(0, 2*pi, N)):
+            self.theta = start_theta + angle
+            r, v = self.to_cartesian()
+            ephemeris[i] = hstack((r, v))
 
-    # Perifocal to ECI transformation
-    C_Gp = array([[cos(RAAN)*cos(omega) - sin(RAAN)*cos(i)*sin(omega), -cos(RAAN)*sin(omega) - sin(RAAN)*cos(i)*cos(omega),  sin(RAAN)*sin(i)],
-                  [sin(RAAN)*cos(omega) + cos(RAAN)*cos(i)*sin(omega), -sin(RAAN)*sin(omega) + cos(RAAN)*cos(i)*cos(omega), -cos(RAAN)*sin(i)],
-                  [                                 sin(i)*sin(omega),                                   sin(i)*cos(omega),            cos(i)]])
+        return ephemeris
 
+    def to_cartesian(self):
 
-    # Distance
-    R = a*(1-e**2)/(1+e*cos(theta))
+        a = self.a
+        e = self.e
+        i = self.i
+        RAAN = self.raan
+        omega = self.omega
+        theta = self.theta
 
-    # Cartesian Position    
-    r_p = array([R*cos(theta), R*sin(theta), 0])
-    r_G = dot(C_Gp, r_p)
+        # Mean motion
+        #n = sqrt(mu/a**3)
 
-    # Cartesian Velocity
-    T2 = sqrt(mu/(a*(1-e**2)))
-    v_p = array([-T2*sin(theta), T2*(e+cos(theta)), 0])
-    v_G = dot(C_Gp, v_p)
+        # Mean Anomaly
+        #M = n*(t-t0)
 
-    return r_G, v_G
+        # Eccentric Anomaly
+        #from scipy.optimize import brentq
+        #E = brentq(lambda E: E - e*sin(E) - M, 0, 2*pi)
+
+        # True Anomaly
+        #theta = 2*arctan(sqrt((1+e)/(1-e))*tan(0.5*E))
+
+        # Perifocal to ECI transformation
+        C_Gp = array([[cos(RAAN)*cos(omega) - sin(RAAN)*cos(i)*sin(omega), -cos(RAAN)*sin(omega) - sin(RAAN)*cos(i)*cos(omega),  sin(RAAN)*sin(i)],
+                      [sin(RAAN)*cos(omega) + cos(RAAN)*cos(i)*sin(omega), -sin(RAAN)*sin(omega) + cos(RAAN)*cos(i)*cos(omega), -cos(RAAN)*sin(i)],
+                      [                                 sin(i)*sin(omega),                                   sin(i)*cos(omega),            cos(i)]])
+
+        # Distance
+        R = a*(1-e**2)/(1+e*cos(theta))
+
+        # Cartesian Position
+        r_p = array([R*cos(theta), R*sin(theta), 0])
+        r_G = dot(C_Gp, r_p)
+
+        # Cartesian Velocity
+        T2 = sqrt(mu/(a*(1-e**2)))
+        v_p = array([-T2*sin(theta), T2*(e+cos(theta)), 0])
+        v_G = dot(C_Gp, v_p)
+
+        return r_G, v_G
 
 
 # Time
@@ -116,7 +148,7 @@ def utc2jd(utc):
     """
     Convert UTC to Julian date.
     """
-    
+
     y   = float(utc.year)
     m   = float(utc.month)
     d   = float(utc.day)
@@ -160,7 +192,7 @@ def R3(a) = cos(a), -sin(a), 0
 def PolarMotion(t_i):
      aka W_CIO
     xp and yp come from tables
-    
+
 
     #s' = - 47 mas (t - 51544.5) / 36525   where t is expressed in modified Julian days (MJD).
     s_prime = 47 uas per century
@@ -170,16 +202,16 @@ def PolarMotion(t_i):
     return R3(-s_prime)*R2(xp)*r1(yp)
 
 def SiderealRotation(a_ERA):
-    
+
     #a_ERA comes from?
-    
+
 
     return R3(-a_ERA)
 
 def BiasPrecessionNutation(t_i):
     # aka BPN_CIO
     X, Y, and s come from tables at t_i
-    
+
 
     X = f(t_i)
     Y = f(t_i)
