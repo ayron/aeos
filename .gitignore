@@ -1,4 +1,4 @@
 GUI/simulation.cfg
 GUI/states.csv
 *.pyc
-
+.ropeproject/
